@@ -81,7 +81,10 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "typeindex": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "string.h": "c",
+        "mpi.h": "c",
+        "mpio.h": "c"
     },
     "java.project.sourcePaths": [
         "Java Work/src",

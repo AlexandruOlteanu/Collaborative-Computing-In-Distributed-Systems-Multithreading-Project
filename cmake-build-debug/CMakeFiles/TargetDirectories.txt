@@ -1,0 +1,3 @@
+A:/Facultate/Cursuri/APD/Collaborative-Computing-In-Distributed-Systems-Multithreading-Project/cmake-build-debug/CMakeFiles/Collaborative_Computing_In_Distributed_Systems_Multithreading_Project.dir
+A:/Facultate/Cursuri/APD/Collaborative-Computing-In-Distributed-Systems-Multithreading-Project/cmake-build-debug/CMakeFiles/edit_cache.dir
+A:/Facultate/Cursuri/APD/Collaborative-Computing-In-Distributed-Systems-Multithreading-Project/cmake-build-debug/CMakeFiles/rebuild_cache.dir
