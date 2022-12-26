@@ -4,7 +4,6 @@
 #include <stdlib.h>
  
 #define  TOP_LEVEL 0
-
 #define NUMBER_OF_ARGUMENTS 3
 #define MAXIMUM_TOP_LEVEL  4
 #define MAXIMUM_LOW_LEVEL 100
@@ -15,6 +14,10 @@
 #define SEND_START_INDEX_TAG 3
 #define SEND_END_INDEX_TAG 4
 #define DEFAULT_MULTIPLY_VALUE 5
+#define NO_ERROR 0
+#define CONNECTION_ERROR 1
+#define PARTITION_ERROR 2
+
 
 char *my_itoa(int number) {
 
@@ -299,7 +302,7 @@ int main (int argc, char *argv[]) {
 			topology_data[level][i] = top_level_workers[i];
 		}
 
-		if (error == 0) {
+		if (error == NO_ERROR) {
 			if (level == 0) {
 				send_data_to_top_level(0, 1, 0, topology_data);
 				send_data_to_top_level(0, 3, 0, topology_data);
@@ -331,7 +334,7 @@ int main (int argc, char *argv[]) {
 				receive_data_from_top_level(3, 0, 1, topology_data);
 			}
 		}
-		else if (error == 1) {
+		else if (error == CONNECTION_ERROR) {
 			 
 			 if (level == 0) {
 				send_data_to_top_level(0, 3, 0, topology_data);
@@ -394,8 +397,6 @@ int main (int argc, char *argv[]) {
 	
 	write_topology(topology_data, level);
 
-	MPI_Barrier(MPI_COMM_WORLD);
-
 	int total_workers = 0;
 	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
 		if (topology_data[i] == NULL) {
@@ -409,7 +410,7 @@ int main (int argc, char *argv[]) {
 		init_and_send_work(result, result_size, topology_data[level], total_workers);
 		receive_result_from_workers(level, topology_data[level], result, result_size);
 		transfer_result(level, 3, result, result_size);
-		if (error != 0) {
+		if (error != NO_ERROR) {
 			receive_result(level, 3, result, result_size);
 			show_final_result(result_size, result);
 		}
@@ -422,13 +423,13 @@ int main (int argc, char *argv[]) {
 	else if (level < MAXIMUM_TOP_LEVEL) {
 
 		if (level == 3) {
-			if (error == 0) {
+			if (error == NO_ERROR) {
 				receive_result(level, TOP_LEVEL, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
 				transfer_result(level, 2, result, result_size);
 			}
-			else if (error == 1 || error == 2) {
+			else if (error == CONNECTION_ERROR || error == PARTITION_ERROR) {
 				receive_result(level, TOP_LEVEL, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
@@ -441,12 +442,12 @@ int main (int argc, char *argv[]) {
 		}
 
 		if (level == 2) {
-			if (error == 0) {
+			if (error == NO_ERROR) {
 				receive_result(level, 3, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
 				transfer_result(level, 1, result, result_size);
-			} else if (error == 1) {
+			} else if (error == CONNECTION_ERROR) {
 				receive_result(level, 3, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
@@ -464,27 +465,23 @@ int main (int argc, char *argv[]) {
 		}
 
 		if (level == 1) {
-			if (error == 0) {
+			if (error == NO_ERROR) {
 				receive_result(level, 2, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
 				transfer_result(level, 0, result, result_size);
-			} else if (error == 1) {
+			} else if (error == CONNECTION_ERROR) {
 				receive_result(level, 2, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
 				transfer_result(level, 2, result, result_size);
-
-			} else {
-				
 			}
 		}
-
 	}
 	else {
 
 		int start, end;
-		if (error != 2 || top_level != 1) {
+		if (error != PARTITION_ERROR || top_level != 1) {
 			receive_result_from_top_level(top_level, result_size, result, &start, &end);
 			calculate_and_send_result_chunk(level, top_level, result_size, result, start, end);
 		}
