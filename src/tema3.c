@@ -9,8 +9,9 @@
 #define MAXIMUM_TOP_LEVEL  4
 #define MAXIMUM_LOW_LEVEL 100
 #define FILE_NAME_LENGTH 100
-#define SEND_DATA_SIZE_TAG 1
-#define SEND_DATA_TAG 2
+#define SEND_DATA_SIZE_TAG 0
+#define SEND_DATA_TAG 1
+#define SEND_TOP_LEVEL_TAG 2
 
 char *my_itoa(int number) {
 
@@ -85,8 +86,6 @@ void send_data_between_top_level(int **topology_data, int level) {
 	topology_data[before] = (int *) malloc((data_size + 1) * sizeof(int));
 	MPI_Recv(topology_data[before], data_size + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-
-
 	MPI_Send(&topology_data[before][0], 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
 	show_communication_message(level, after);
 
@@ -103,6 +102,7 @@ void send_data_between_top_level(int **topology_data, int level) {
 	if (second_after >= MAXIMUM_TOP_LEVEL) {
 		second_after = 0;
 	}
+
 	MPI_Recv(&data_size, 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	topology_data[second_after] = (int *) malloc((data_size + 1) * sizeof(int));
 	MPI_Recv(topology_data[second_after], data_size + 1, MPI_INT, after, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -111,11 +111,44 @@ void send_data_between_top_level(int **topology_data, int level) {
 	if (second_before < 0) {
 		second_before = MAXIMUM_TOP_LEVEL - 1;
 	}
+
 	MPI_Recv(&data_size, 1, MPI_INT, before, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	topology_data[second_before] = (int *) malloc((data_size + 1) * sizeof(int));
 	MPI_Recv(topology_data[second_before], data_size + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	
 }
+
+void send_topology_to_workers(int **topology_data, int level) {
+
+	int workers = topology_data[level][0];
+	for (int i = 1; i <= workers; ++i) {
+		MPI_Send(&level, 1, MPI_INT, topology_data[level][i], SEND_TOP_LEVEL_TAG, MPI_COMM_WORLD);
+		show_communication_message(level, topology_data[level][i]);
+
+		for (int j = 0; j < MAXIMUM_TOP_LEVEL; ++j) {
+			MPI_Send(&topology_data[j][0], 1, MPI_INT, topology_data[level][i], SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
+			show_communication_message(level, topology_data[level][i]);
+
+			MPI_Send(topology_data[j], topology_data[j][0] + 1, MPI_INT, topology_data[level][i], SEND_DATA_TAG, MPI_COMM_WORLD);
+			show_communication_message(level, topology_data[level][i]);
+			
+		}
+
+	}
+}
+
+void receive_data_from_top_level(int **topology_data, int *top_level) {
+
+	MPI_Recv(top_level, 1, MPI_INT, MPI_ANY_SOURCE, SEND_TOP_LEVEL_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
+		int data_size;
+		MPI_Recv(&data_size, 1, MPI_INT, *top_level, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		topology_data[i] = (int *) malloc((data_size + 1) * sizeof(int));
+		MPI_Recv(topology_data[i], data_size + 1, MPI_INT, *top_level, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+}
+
 
 
 void write_topology(int **topology_data, int level) {
@@ -163,6 +196,7 @@ int main (int argc, char *argv[]) {
 	
 	int *top_level_workers = (int *) malloc(MAXIMUM_LOW_LEVEL * sizeof(int));
 
+	int top_level;
 	if (level < MAXIMUM_TOP_LEVEL) {
 		extract_data(top_level_workers, level);
 		int workers_number = top_level_workers[0];
@@ -172,11 +206,14 @@ int main (int argc, char *argv[]) {
 		}
 		
 		send_data_between_top_level(topology_data, level);
-		write_topology(topology_data, level);
+		send_topology_to_workers(topology_data, level);
 	}
-	else {
 
+	if (level >= MAXIMUM_TOP_LEVEL) {
+		receive_data_from_top_level(topology_data, &top_level);
 	}
+	
+	write_topology(topology_data, level);
 
 	
  
