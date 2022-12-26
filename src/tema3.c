@@ -118,24 +118,24 @@ void send_data_between_top_level(int **topology_data, int level) {
 	
 }
 
-void send_topology_to_workers(int **topology_data, int level) {
+void send_topology_to_workers(int** topology, int level) {
+  	int workers = topology[level][0];
+  	for (int i = 1; i <= workers; ++i) {
+		int worker_rank = topology[level][i];
+    	MPI_Send(&level, 1, MPI_INT, worker_rank, SEND_TOP_LEVEL_TAG, MPI_COMM_WORLD);
+    	show_communication_message(level, worker_rank);
 
-	int workers = topology_data[level][0];
-	for (int i = 1; i <= workers; ++i) {
-		MPI_Send(&level, 1, MPI_INT, topology_data[level][i], SEND_TOP_LEVEL_TAG, MPI_COMM_WORLD);
-		show_communication_message(level, topology_data[level][i]);
+    	for (int j = 0; j < MAXIMUM_TOP_LEVEL; ++j) {
+      		int data_size = topology[j][0];
+      		MPI_Send(&data_size, 1, MPI_INT, worker_rank, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
+      		show_communication_message(level, worker_rank);
 
-		for (int j = 0; j < MAXIMUM_TOP_LEVEL; ++j) {
-			MPI_Send(&topology_data[j][0], 1, MPI_INT, topology_data[level][i], SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
-			show_communication_message(level, topology_data[level][i]);
-
-			MPI_Send(topology_data[j], topology_data[j][0] + 1, MPI_INT, topology_data[level][i], SEND_DATA_TAG, MPI_COMM_WORLD);
-			show_communication_message(level, topology_data[level][i]);
-			
-		}
-
-	}
+      		MPI_Send(topology[j], data_size + 1, MPI_INT, worker_rank, SEND_DATA_TAG, MPI_COMM_WORLD);
+      		show_communication_message(level, worker_rank);
+    	}
+  	}
 }
+
 
 void receive_data_from_top_level(int **topology_data, int *top_level) {
 
