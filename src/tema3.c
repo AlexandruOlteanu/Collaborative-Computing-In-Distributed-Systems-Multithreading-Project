@@ -55,70 +55,23 @@ void show_communication_message(int source, int destination) {
 
 }
 
-void send_data_between_top_level(int **topology_data, int level) {
 
-	int before = level - 1;
-	int after = level + 1;
+void send_data_to_top_level(int source, int destination, int level_of_data, int **topology_data) {
 
-	if (before < 0) {
-		before = MAXIMUM_TOP_LEVEL - 1;
-	}	
-	if (after >= MAXIMUM_TOP_LEVEL) {
-		after = 0;
-	}
-	
+	MPI_Send(&topology_data[level_of_data][0], 1, MPI_INT, destination, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
+	show_communication_message(source, destination);
+
+	MPI_Send(topology_data[level_of_data], topology_data[level_of_data][0] + 1, MPI_INT, destination, SEND_DATA_TAG, MPI_COMM_WORLD);
+	show_communication_message(source, destination);
+}
+
+void receive_data_from_top_level(int source, int destination, int level_of_data, int **topology_data) {
 
 	int data_size;
-	MPI_Send(&topology_data[level][0], 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, after);
+	MPI_Recv(&data_size, 1, MPI_INT, destination, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	topology_data[level_of_data] = (int *) malloc((data_size + 1) * sizeof(int));
+	MPI_Recv(topology_data[level_of_data], data_size + 1, MPI_INT, destination, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-	MPI_Send(topology_data[level], topology_data[level][0] + 1, MPI_INT, after, SEND_DATA_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, after);
-
-	MPI_Send(&topology_data[level][0], 1, MPI_INT, before, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, before);
-
-	MPI_Send(topology_data[level], topology_data[level][0] + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, before);
-
-	MPI_Recv(&data_size, 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	topology_data[after] = (int *) malloc((data_size + 1) * sizeof(int));
-	MPI_Recv(topology_data[after], data_size + 1, MPI_INT, after, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-	MPI_Recv(&data_size, 1, MPI_INT, before, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	topology_data[before] = (int *) malloc((data_size + 1) * sizeof(int));
-	MPI_Recv(topology_data[before], data_size + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-	MPI_Send(&topology_data[before][0], 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, after);
-
-	MPI_Send(topology_data[before], topology_data[before][0] + 1, MPI_INT, after, SEND_DATA_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, after);
-
-	MPI_Send(&topology_data[after][0], 1, MPI_INT, before, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, before);
-	
-	MPI_Send(topology_data[after], topology_data[after][0] + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD);
-	show_communication_message(level, before);
-
-	int second_after = after + 1;
-	if (second_after >= MAXIMUM_TOP_LEVEL) {
-		second_after = 0;
-	}
-
-	MPI_Recv(&data_size, 1, MPI_INT, after, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	topology_data[second_after] = (int *) malloc((data_size + 1) * sizeof(int));
-	MPI_Recv(topology_data[second_after], data_size + 1, MPI_INT, after, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-	int second_before = before - 1;
-	if (second_before < 0) {
-		second_before = MAXIMUM_TOP_LEVEL - 1;
-	}
-
-	MPI_Recv(&data_size, 1, MPI_INT, before, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	topology_data[second_before] = (int *) malloc((data_size + 1) * sizeof(int));
-	MPI_Recv(topology_data[second_before], data_size + 1, MPI_INT, before, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	
 }
 
 void send_topology_to_workers(int** topology, int level) {
@@ -138,7 +91,6 @@ void send_topology_to_workers(int** topology, int level) {
     	}
   	}
 }
-
 
 void receive_topology_from_top_level(int **topology_data, int *top_level) {
 
@@ -318,6 +270,10 @@ int main (int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
+	int result_size = atoi(argv[1]);
+	int error = atoi(argv[2]);
+	int *result = (int *) malloc(result_size * sizeof(int));
+
 	int **topology_data = (int **) malloc(MAXIMUM_TOP_LEVEL * sizeof(int *));
 	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
 		topology_data[i] = NULL;
@@ -333,8 +289,76 @@ int main (int argc, char *argv[]) {
 		for (int i = 0; i <= workers_number; ++i) {
 			topology_data[level][i] = top_level_workers[i];
 		}
-		
-		send_data_between_top_level(topology_data, level);
+
+		if (error == 0) {
+			if (level == 0) {
+				send_data_to_top_level(0, 1, 0, topology_data);
+				send_data_to_top_level(0, 3, 0, topology_data);
+				receive_data_from_top_level(0, 3, 3, topology_data);
+				receive_data_from_top_level(0, 1, 1, topology_data);
+				send_data_to_top_level(0, 3, 1, topology_data);
+				send_data_to_top_level(0, 1, 3, topology_data);
+				receive_data_from_top_level(0, 1, 2, topology_data);
+			}
+			else if (level == 1) {
+				send_data_to_top_level(1, 0, 1, topology_data);
+				send_data_to_top_level(1, 2, 1, topology_data);
+				receive_data_from_top_level(1, 0, 0, topology_data);
+				receive_data_from_top_level(1, 2, 2, topology_data);
+				send_data_to_top_level(1, 0, 2, topology_data);
+				send_data_to_top_level(1, 2, 0, topology_data);
+				receive_data_from_top_level(1, 0, 3, topology_data);
+			} else if (level == 2) {
+				send_data_to_top_level(2, 1, 2, topology_data);
+				send_data_to_top_level(2, 3, 2, topology_data);
+				receive_data_from_top_level(2, 1, 1, topology_data);
+				receive_data_from_top_level(2, 3, 3, topology_data);
+				receive_data_from_top_level(2, 1, 0, topology_data);
+			} else {
+				send_data_to_top_level(3, 0, 3, topology_data);
+				send_data_to_top_level(3, 2, 3, topology_data);
+				receive_data_from_top_level(3, 0, 0, topology_data);
+				receive_data_from_top_level(3, 2, 2, topology_data);
+				receive_data_from_top_level(3, 0, 1, topology_data);
+			}
+		}
+		else if (error == 1) {
+			 
+			 if (level == 0) {
+				send_data_to_top_level(0, 3, 0, topology_data);
+				receive_data_from_top_level(0, 3, 3, topology_data);
+				receive_data_from_top_level(0, 3, 2, topology_data);
+				receive_data_from_top_level(0, 3, 1, topology_data);
+			}
+			else if (level == 1) {
+				send_data_to_top_level(1, 2, 1, topology_data);
+				receive_data_from_top_level(1, 2, 2, topology_data);
+				receive_data_from_top_level(1, 2, 3, topology_data);
+				receive_data_from_top_level(1, 2, 0, topology_data);
+			} else if (level == 2) {
+				send_data_to_top_level(2, 1, 2, topology_data);
+				send_data_to_top_level(2, 3, 2, topology_data);
+				receive_data_from_top_level(2, 1, 1, topology_data);
+				receive_data_from_top_level(2, 3, 3, topology_data);
+				send_data_to_top_level(2, 3, 1, topology_data);
+				send_data_to_top_level(2, 1, 3, topology_data);
+				receive_data_from_top_level(2, 3, 0, topology_data);
+				send_data_to_top_level(2, 1, 0, topology_data);
+			} else {
+				send_data_to_top_level(3, 0, 3, topology_data);
+				send_data_to_top_level(3, 2, 3, topology_data);
+				receive_data_from_top_level(3, 0, 0, topology_data);
+				receive_data_from_top_level(3, 2, 2, topology_data);
+				receive_data_from_top_level(3, 2, 1, topology_data);
+				send_data_to_top_level(3, 0, 2, topology_data);
+				send_data_to_top_level(3, 0, 1, topology_data);
+				send_data_to_top_level(3, 2, 0, topology_data);
+			}
+
+		} else {
+
+		}
+
 		send_topology_to_workers(topology_data, level);
 	}
 
@@ -345,10 +369,6 @@ int main (int argc, char *argv[]) {
 	write_topology(topology_data, level);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-
-	int result_size = atoi(argv[1]);
-	int error = atoi(argv[2]);
-	int *result = (int *) malloc(result_size * sizeof(int));
 
 	int total_workers = 0;
 	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
@@ -361,7 +381,8 @@ int main (int argc, char *argv[]) {
 		receive_result_from_workers(level, topology_data[level], result, result_size);
 		transfer_result(level, 3, result, result_size);
 		if (error != 0) {
-
+			receive_result(level, 3, result, result_size);
+			show_final_result(result_size, result);
 		}
 		else {
 			receive_result(level, 1, result, result_size);
@@ -372,25 +393,62 @@ int main (int argc, char *argv[]) {
 	else if (level < MAXIMUM_TOP_LEVEL) {
 
 		if (level == 3) {
-			receive_result(level, TOP_LEVEL, result, result_size);
-			transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
-			receive_result_from_workers(level, topology_data[level], result, result_size);
-			transfer_result(level, 2, result, result_size);
+			if (error == 0) {
+				receive_result(level, TOP_LEVEL, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 2, result, result_size);
+			}
+			else if (error == 1) {
+				receive_result(level, TOP_LEVEL, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 2, result, result_size);
+
+				receive_result(level, 2, result, result_size);
+				transfer_result(level, 0, result, result_size);
+
+			} else {
+
+			}
 
 		}
 
 		if (level == 2) {
-			receive_result(level, 3, result, result_size);
-			transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
-			receive_result_from_workers(level, topology_data[level], result, result_size);
-			transfer_result(level, 1, result, result_size);
+			if (error == 0) {
+				receive_result(level, 3, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 1, result, result_size);
+			} else if (error == 1) {
+				receive_result(level, 3, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 1, result, result_size);
+
+				receive_result(level, 1, result, result_size);
+				transfer_result(level, 3, result, result_size);
+
+			} else {
+
+			}
 		}
 
 		if (level == 1) {
-			receive_result(level, 2, result, result_size);
-			transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
-			receive_result_from_workers(level, topology_data[level], result, result_size);
-			transfer_result(level, 0, result, result_size);
+			if (error == 0) {
+				receive_result(level, 2, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 0, result, result_size);
+			} else if (error == 1) {
+				receive_result(level, 2, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 2, result, result_size);
+
+			} else {
+				
+			}
 		}
 
 	}
@@ -401,8 +459,6 @@ int main (int argc, char *argv[]) {
 		calculate_and_send_result_chunk(level, top_level, result_size, result, start, end);
 	}
 
-
-	
  
     MPI_Finalize();
 
