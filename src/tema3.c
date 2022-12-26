@@ -74,7 +74,7 @@ void receive_data_from_top_level(int source, int destination, int level_of_data,
 
 }
 
-void send_topology_to_workers(int** topology, int level) {
+void send_topology_to_workers(int **topology, int level) {
   	int workers = topology[level][0];
   	for (int i = 1; i <= workers; ++i) {
 		int worker_rank = topology[level][i];
@@ -82,7 +82,13 @@ void send_topology_to_workers(int** topology, int level) {
     	show_communication_message(level, worker_rank);
 
     	for (int j = 0; j < MAXIMUM_TOP_LEVEL; ++j) {
-      		int data_size = topology[j][0];
+      		int data_size = 0;
+			if (topology[j] == NULL) {
+				MPI_Send(&data_size, 1, MPI_INT, worker_rank, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
+      			show_communication_message(level, worker_rank);
+				continue;
+			}
+			data_size = topology[j][0];
       		MPI_Send(&data_size, 1, MPI_INT, worker_rank, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD);
       		show_communication_message(level, worker_rank);
 
@@ -99,6 +105,9 @@ void receive_topology_from_top_level(int **topology_data, int *top_level) {
 	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
 		int data_size;
 		MPI_Recv(&data_size, 1, MPI_INT, *top_level, SEND_DATA_SIZE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		if (!data_size) {
+			continue;
+		}
 		topology_data[i] = (int *) malloc((data_size + 1) * sizeof(int));
 		MPI_Recv(topology_data[i], data_size + 1, MPI_INT, *top_level, SEND_DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
@@ -356,7 +365,24 @@ int main (int argc, char *argv[]) {
 			}
 
 		} else {
-
+			if (level == 0) {
+				send_data_to_top_level(0, 3, 0, topology_data);
+				receive_data_from_top_level(0, 3, 3, topology_data);
+				receive_data_from_top_level(0, 3, 2, topology_data);
+			}
+			else if (level == 2) {
+				send_data_to_top_level(2, 3, 2, topology_data);
+				receive_data_from_top_level(2, 3, 3, topology_data);
+				receive_data_from_top_level(2, 3, 0, topology_data);
+			} 
+			else if (level == 3) {
+				send_data_to_top_level(3, 0, 3, topology_data);
+				send_data_to_top_level(3, 2, 3, topology_data);
+				receive_data_from_top_level(3, 0, 0, topology_data);
+				receive_data_from_top_level(3, 2, 2, topology_data);
+				send_data_to_top_level(3, 0, 2, topology_data);
+				send_data_to_top_level(3, 2, 0, topology_data);
+			}
 		}
 
 		send_topology_to_workers(topology_data, level);
@@ -372,6 +398,9 @@ int main (int argc, char *argv[]) {
 
 	int total_workers = 0;
 	for (int i = 0; i < MAXIMUM_TOP_LEVEL; ++i) {
+		if (topology_data[i] == NULL) {
+			continue;
+		}
 		total_workers += topology_data[i][0];
 	}
 
@@ -399,7 +428,7 @@ int main (int argc, char *argv[]) {
 				receive_result_from_workers(level, topology_data[level], result, result_size);
 				transfer_result(level, 2, result, result_size);
 			}
-			else if (error == 1) {
+			else if (error == 1 || error == 2) {
 				receive_result(level, TOP_LEVEL, result, result_size);
 				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 0);
 				receive_result_from_workers(level, topology_data[level], result, result_size);
@@ -408,10 +437,7 @@ int main (int argc, char *argv[]) {
 				receive_result(level, 2, result, result_size);
 				transfer_result(level, 0, result, result_size);
 
-			} else {
-
 			}
-
 		}
 
 		if (level == 2) {
@@ -430,7 +456,10 @@ int main (int argc, char *argv[]) {
 				transfer_result(level, 3, result, result_size);
 
 			} else {
-
+				receive_result(level, 3, result, result_size);
+				transfer_result_to_workers(level, result, result_size, topology_data, total_workers, 1);
+				receive_result_from_workers(level, topology_data[level], result, result_size);
+				transfer_result(level, 3, result, result_size);
 			}
 		}
 
@@ -455,8 +484,10 @@ int main (int argc, char *argv[]) {
 	else {
 
 		int start, end;
-		receive_result_from_top_level(top_level, result_size, result, &start, &end);
-		calculate_and_send_result_chunk(level, top_level, result_size, result, start, end);
+		if (error != 2 || top_level != 1) {
+			receive_result_from_top_level(top_level, result_size, result, &start, &end);
+			calculate_and_send_result_chunk(level, top_level, result_size, result, start, end);
+		}
 	}
 
  
